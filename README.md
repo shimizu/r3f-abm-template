@@ -127,7 +127,7 @@ const colors = {
 
 ```mermaid
 graph TD
-    A[User Input] --> B[AgentScript.step()]
+    A[User Input] --> B["AgentScript.step()"]
     B --> C[Agent Position Update]
     C --> D[React State Update]
     D --> E[Three.js Re-render]
