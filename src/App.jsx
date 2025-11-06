@@ -13,7 +13,7 @@ function App() {
      <Canvas 
       shadows
       camera={{
-        position: [0.6973766503794323, 24.209815598943365, 25.26654892288738]
+        position: [0, 11, 10],
       }
     }>
         <Scene />

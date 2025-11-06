@@ -1,174 +1,165 @@
 import { useEffect, useState, useRef, useMemo } from "react"
-import { OrbitControls, RandomizedLight, Grid } from "@react-three/drei"
+import { OrbitControls, RandomizedLight, Grid, Environment } from "@react-three/drei"
 import * as THREE from "three"
 import { useControls, button } from "leva"
 import { useFrame, useThree } from "@react-three/fiber";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import chroma from 'chroma-js';
+import { useSpring, animated, config } from '@react-spring/three' // react-spring から config をインポート
+
+import { MenModel } from "./men.jsx"
 
 import { stepSimulation, resetSimulation, model } from './agentScript.js';
 
+// MenModelのアニメーション版を作成する
+const AnimatedMenModel = animated(MenModel);
 
-function AgentSphere({ agents }) {
-    const meshRef = useRef();
+/**
+ * 位置と回転をアニメーション化する単一のエージェントコンポーネント。
+ * @param {{agent: Object}} props - The agent data.
+ */
+function Agent({ agent }) {
+    const { position, theta } = agent;
 
-    //exitIDの確認
-    //console.log(Array.from(new Set(agents.map(a=>a.exitID))))
-
-    const colors = {
-        'E15:38': 0xff0000,
-        'E15:37': 0xff0000,
-
-        'E37:20': 0x0000ff,
-        'E37:19': 0x0000ff,
-
-        'E0:19': 0xffff00,
-        'E0:20': 0xffff00,
-
-        'E34:0': 0x00ffff,
-        'E35:0': 0x00ffff,
-    }
-
-
-    // 一度だけジオメトリとマテリアルを作成
-    const geometry = new THREE.CapsuleGeometry(0.5, 1, 4, 16)//useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
-    const material = new THREE.MeshPhongMaterial({  
-        vertexColors: true 
-    })
-
-    useEffect(() => {
-        if (meshRef.current) {
-
-            const colorArray = new Float32Array(agents.length * 3);
-
-            agents.forEach((agent, i) => {
-
-                // 各インスタンスのポジションを設定
-                meshRef.current.setMatrixAt(i, new THREE.Matrix4().makeTranslation(
-                    agent.position[0],
-                    0.8,
-                    agent.position[2]
-                ));
-
-                // 各インスタンスの色を設定
-                const materialColor = colors[agent.exitID];
-                const color = new THREE.Color(materialColor);
-                colorArray.set(color.toArray(), i * 3); // 色をcolorArrayに格納
-
-            });
-            // 変更を通知
-            meshRef.current.instanceMatrix.needsUpdate = true;
-            geometry.setAttribute('color', new THREE.InstancedBufferAttribute(colorArray, 3));
-
-        }
-    }, [agents]);
+    const { springPosition, springRotation } = useSpring({
+        to: {
+            springPosition: [position[0], -0.5, position[2]], //次の移動位置までアニメーション
+            springRotation: [0, theta, 0], // 回転をアニメーションさせる場合
+        },
+        // バウンスしないように、アニメーションの挙動を 'gentle' (穏やか) に設定
+        config: config.gentle,
+    });
 
     return (
-        <group >
-            <instancedMesh ref={meshRef} args={[geometry, material, agents.length]} />
-        </group>
+        <AnimatedMenModel
+            position={springPosition}
+            rotation={[0, theta, 0]} //回転は即時反映の方が動きがよい
+        />
     );
 }
 
 
+/**
+ * すべてのエージェントをレンダリングします。
+ * @param {{agents: Array<Object>}} props - エージェントの配列。
+ */
+function AgentMen({ agents }) {
+    return (
+        <group>
+                        {/* key としてエージェント固有のIDを使用 */}
+            {agents.map((agent) => (
+                <Agent key={agent.id} agent={agent} />
+            ))}
+        </group>
+    );
+}
+
+/**
+ * パッチ（壁）をインスタンス化して描画するコンポーネント
+ * @param {{patches: Object}} props - パッチデータ
+ */
 function PatchesSphere({ patches }) {
     const meshRef = useRef();
 
-    // 一度だけジオメトリとマテリアルを作成
-    const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
+    // パフォーマンス向上のため、ジオメトリとマテリアルをメモ化
+    const geometry = useMemo(() => new THREE.BoxGeometry(1, 2, 1), []);
     const material = useMemo(() => new THREE.MeshPhongMaterial({ color: 0x666666 }), []);
 
-
-    const world = patches.model.world 
-    const wall = patches.breeds.wall
-
+    // AgentScriptモデルから壁のデータを取得
+    const wall = patches.breeds.wall;
 
     useEffect(() => {
         if (meshRef.current) {
             wall.forEach((patch, i) => {
-                // 各インスタンスの位置を設定
+                // 各インスタンス（壁ブロック）の位置を設定
                 const matrix = new THREE.Matrix4();
                 matrix.makeTranslation(
-                    patch.x,  // X軸の位置
-                    1.5,        // Y軸の位置（固定）
-                    patch.y   // Z軸の位置
+                    patch.x,  // X座標
+                    0.5,      // Y座標（固定）
+                    patch.y   // Z座標
                 );
 
                 // インスタンスに変換行列を適用
                 meshRef.current.setMatrixAt(i, matrix);
             });
-            // 位置の変更を通知
+            // 位置の変更をGPUに通知
             meshRef.current.instanceMatrix.needsUpdate = true;
         }
-    }, [wall]);
+    }, [wall]); // wallデータが変更されたときにのみ実行
 
     return (
+        // InstancedMeshを使用して多数の壁ブロックを効率的に描画
         <instancedMesh ref={meshRef} args={[geometry, material, wall.length]} />
     );
 }
 
-
-
-
+/**
+ * メインの3Dシーンコンポーネント
+ * シミュレーションの制御、エージェントと環境のレンダリングを管理
+ */
 function Scene() {
+    // シミュレーションのエージェントの状態を管理
     const [agents, setAgents] = useState([]);
-    let intervalID
+    let intervalID; // シミュレーションのインターバルID
 
-
-    const { start ,reset } = useControls({
+    // Leva UIコントロール（開始・リセット・ステップ実行ボタン）
+    const {} = useControls({
         start: button(() => {
-            if (!intervalID) intervalID = setInterval(() => {
-                setp()
-            }, 110)
+            // インターバルがなければ、シミュレーションを開始
+            if (!intervalID) {
+                intervalID = setInterval(() => {
+                    setp();
+                }, 220); // 110msごとにステップを実行
+            }
         }),
-        reset:button(()=>{
-            clearInterval(intervalID)
+        reset: button(() => {
+            // シミュレーションを停止し、リセット
+            clearInterval(intervalID);
             intervalID = undefined;
-            resetSimulation()
-            setp()
+            resetSimulation();
+            setp(); // 初期状態を反映
+        }),
+        step: button(() => {
+            setp();
         })
-    })
+    });
 
-    const setp = ()=>{
+    // シミュレーションを1ステップ進め、エージェントの状態を更新する関数
+    const setp = () => {
         const updatedAgents = stepSimulation();
-        setAgents(updatedAgents); 
-    }
+        setAgents(updatedAgents);
+    };
 
+    // コンポーネントのマウント時にシミュレーションを初期化
     useEffect(() => {
-        setp()        
-    }, [])
+        setp();
+    }, []);
 
+    const { camera } = useThree();
 
-    const { camera } = useThree()
-
-    //カメラ位置取得
+    // カメラの位置をデバッグするために使用
     const handleCamera = () => {
-        //console.log(camera.position)
-    }
-
-
+        // console.log(camera.position);
+    };
 
     return (
         <>
+            {/* カメラコントロール（オービット） */}
+            <OrbitControls onChange={handleCamera} />
 
-            <OrbitControls 
-                onChange={handleCamera} 
-            />
+            <Environment preset="sunset" />
 
+            {/* ランダムな位置に光源を配置 */}
             <RandomizedLight />
 
-
+            {/* エージェントと壁を含むグループ */}
             <group>
-                <AgentSphere agents={agents} />
+                <AgentMen agents={agents} />
                 <PatchesSphere patches={model.patches} />
             </group>
-            
-            <mesh>
-                <boxGeometry args={[1,1,1]} />
-                <meshBasicMaterial color={0xff0000} />
-            </mesh>
 
-            <group position={[0.5,-0.5,0.5]}>
+            {/* 地面のグリッド */}
+            <group position={[0.5, -0.5, 0.5]}>
                 <Grid
                     gridSize={[1, 1]}
                     cellSize={1}
@@ -180,9 +171,8 @@ function Scene() {
                     infiniteGrid={true}
                 />
             </group>
-
         </>
-    )
+    );
 }
 
-export default Scene
+export default Scene;
