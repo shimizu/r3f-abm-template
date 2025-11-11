@@ -2,7 +2,7 @@ import React from 'react'
 import { useGLTF } from '@react-three/drei'
 
 export function Curved(props) {
-  const { nodes, materials } = useGLTF('/model/walls/curved.glb')
+  const { nodes, materials } = useGLTF('./model/walls/curved.glb')
   return (
     <group {...props} dispose={null} scale={[1,1.5,1]}>
       <mesh
@@ -22,7 +22,7 @@ export function Curved(props) {
 }
 
 export function Junction(props) {
-  const { nodes, materials } = useGLTF('/model/walls/junction.glb')
+  const { nodes, materials } = useGLTF('./model/walls/junction.glb')
   return (
     <group {...props} dispose={null}  scale={[1,1.5,1]}>
       <mesh
@@ -36,7 +36,7 @@ export function Junction(props) {
 }
 
 export function Straight(props) {
-  const { nodes, materials } = useGLTF('/model/walls/straight.glb')
+  const { nodes, materials } = useGLTF('./model/walls/straight.glb')
   return (
     <group {...props} dispose={null} scale={[1,1.5,1]}>
       <mesh
@@ -56,7 +56,7 @@ export function Straight(props) {
 }
 
 export function Tsplit(props) {
-  const { nodes, materials } = useGLTF('/model/walls/tsplit.glb')
+  const { nodes, materials } = useGLTF('./model/walls/tsplit.glb')
   return (
     <group {...props} dispose={null}  scale={[1,1.5,1]}>
       <mesh
@@ -76,7 +76,7 @@ export function Tsplit(props) {
 }
 
 export function End(props) {
-  const { nodes, materials } = useGLTF('/model/walls/end.glb')
+  const { nodes, materials } = useGLTF('./model/walls/end.glb')
   return (
     <group {...props} dispose={null}  scale={[1,1.5,1]}>
       <mesh
