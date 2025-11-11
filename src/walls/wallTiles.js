@@ -44,7 +44,7 @@ export function buildWallTiles(wallPatches) {
       id: `wall-${patch.x}-${patch.y}`,
       Component,
       rotation,
-      position: [patch.x, 0, patch.y],
+      position: [patch.x, -0.5, patch.y],
       type
     }
   })

@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo } from "react"
-import { OrbitControls, RandomizedLight, Grid, Environment } from "@react-three/drei"
+import { OrbitControls, RandomizedLight, Grid, Environment, Html } from "@react-three/drei"
 import { useControls, button } from "leva"
 import { useThree } from "@react-three/fiber";
 import { useSpring, animated, config } from '@react-spring/three' // react-spring から config をインポート
 
 import { MenModel } from "./agents/men.jsx"
 
-import { stepSimulation, resetSimulation, model } from './agentScript.js';
+import { stepSimulation, resetSimulation, model, agentStatsTracker } from './agentScript.js';
 
 
 //テスト読み込み
@@ -103,6 +103,7 @@ function PatchesSphere({ patches, debugOptions = {} }) {
 function Scene() {
     // シミュレーションのエージェントの状態を管理
     const [agents, setAgents] = useState([]);
+    const [agentStats, setAgentStats] = useState(() => agentStatsTracker.getLatest?.() ?? null);
     let intervalID; // シミュレーションのインターバルID
 
     // Leva UIコントロール（開始・リセット・ステップ実行ボタン）
@@ -140,6 +141,16 @@ function Scene() {
     // コンポーネントのマウント時にシミュレーションを初期化
     useEffect(() => {
         setp();
+        const unsubscribe = agentStatsTracker.subscribe(snapshot => {
+            setAgentStats(snapshot);
+        });
+
+        return () => {
+            unsubscribe();
+            if (intervalID) {
+                clearInterval(intervalID);
+            }
+        };
     }, []);
 
     const { camera } = useThree();
@@ -151,6 +162,9 @@ function Scene() {
 
     return (
         <>
+            <AgentStatsPanel stats={agentStats} />
+
+
             {/* カメラコントロール（オービット） */}
             <OrbitControls onChange={handleCamera} />
 
@@ -179,7 +193,57 @@ function Scene() {
                     infiniteGrid={true}
                 />
             </group>
+
         </>
+    );
+}
+
+function AgentStatsPanel({ stats }) {
+    if (!stats) return null;
+
+    const rows = [
+        { label: 'Tick', value: stats.tick },
+        { label: 'Agents', value: stats.totalAgents },
+        { label: 'Inside', value: stats.insideAgents },
+        { label: 'Exited', value: stats.exitedAgents },
+        { label: 'Blocked', value: stats.blockedAgents },
+        { label: 'Avg Dist', value: stats.avgDistanceToExit.toFixed(2) },
+        { label: 'Occupancy', value: `${(stats.occupancyRatio * 100).toFixed(1)}%` }
+    ];
+
+    return (
+        <Html
+            fullscreen 
+            style={{
+                pointerEvents:"none",
+            }}
+        >
+            <div
+               className="panel"
+                style={{
+                    position: 'absolute',
+                    top:10,
+                    left:10,
+                    minWidth: 200,
+                    padding: '12px 16px',
+                    borderRadius: 12,
+                    background: 'rgba(16, 18, 32, 0.85)',
+                    color: '#f5f5f5',
+                    fontFamily: '"Inter", sans-serif',
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    boxShadow: '0 12px 24px rgba(0,0,0,0.35)'
+                }}
+            >
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>Agent Stats</div>
+                {rows.map(row => (
+                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ opacity: 0.7 }}>{row.label}</span>
+                        <span>{row.value}</span>
+                    </div>
+                ))}
+            </div>
+        </Html>
     );
 }
 

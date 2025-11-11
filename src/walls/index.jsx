@@ -4,7 +4,7 @@ import { useGLTF } from '@react-three/drei'
 export function Curved(props) {
   const { nodes, materials } = useGLTF('/model/walls/curved.glb')
   return (
-    <group {...props} dispose={null} scale={[1,1,1]}>
+    <group {...props} dispose={null} scale={[1,1.5,1]}>
       <mesh
         castShadow
         receiveShadow
@@ -24,7 +24,7 @@ export function Curved(props) {
 export function Junction(props) {
   const { nodes, materials } = useGLTF('/model/walls/junction.glb')
   return (
-    <group {...props} dispose={null}  scale={[0.5,1,0.5]}>
+    <group {...props} dispose={null}  scale={[1,1.5,1]}>
       <mesh
         castShadow
         receiveShadow
@@ -38,7 +38,7 @@ export function Junction(props) {
 export function Straight(props) {
   const { nodes, materials } = useGLTF('/model/walls/straight.glb')
   return (
-    <group {...props} dispose={null}>
+    <group {...props} dispose={null} scale={[1,1.5,1]}>
       <mesh
         castShadow
         receiveShadow
@@ -58,7 +58,7 @@ export function Straight(props) {
 export function Tsplit(props) {
   const { nodes, materials } = useGLTF('/model/walls/tsplit.glb')
   return (
-    <group {...props} dispose={null}>
+    <group {...props} dispose={null}  scale={[1,1.5,1]}>
       <mesh
         castShadow
         receiveShadow
@@ -78,7 +78,7 @@ export function Tsplit(props) {
 export function End(props) {
   const { nodes, materials } = useGLTF('/model/walls/end.glb')
   return (
-    <group {...props} dispose={null}>
+    <group {...props} dispose={null}  scale={[1,1.5,1]}>
       <mesh
         castShadow
         receiveShadow

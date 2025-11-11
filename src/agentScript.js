@@ -1,5 +1,6 @@
 // AgentScriptライブラリから必要なクラスをインポート
 import { Model, World, DataSet, RGBADataSet } from 'agentscript';
+import { agentStatsTracker, buildAgentSnapshot } from './agentStats.js'
 
 // レイアウトデータをインポート（部屋の構造定義）
 import { layout, layout2 } from './layout';
@@ -141,6 +142,7 @@ let model = new ExitModel()
 // モデルの起動と初期設定を実行
 model.startup()  // AgentScriptの基本初期化
 model.setup()    // カスタム設定の実行
+captureAgentStats()
 
 // デバッグ用ログ（コメントアウト）
 // console.log("patches", model.exits)  // 出口パッチの確認
@@ -152,6 +154,7 @@ model.setup()    // カスタム設定の実行
 // React Three Fiberでの描画用にエージェントデータを取得
 function stepSimulation() {
     model.step()  // シミュレーション計算を1ステップ実行
+    captureAgentStats()
 
     // 全エージェントの現在状態を3D描画用に変換
     const agents = model.turtles.map(t => {
@@ -171,9 +174,26 @@ function resetSimulation() {
     // 新しいモデルインスタンスを作成（完全リセット）
     model = new ExitModel()
     model.startup()  // AgentScriptの基本初期化
+    agentStatsTracker.clear()
     model.setup()    // カスタム設定の再実行
+    captureAgentStats()
 }
 
 
 // React側で使用する関数とモデルをエクスポート
-export { stepSimulation, resetSimulation, model };
+export { stepSimulation, resetSimulation, model, agentStatsTracker };
+
+function captureAgentStats() {
+    if (!model) return null
+
+    const snapshot = buildAgentSnapshot({
+        tick: model.ticks ?? 0,
+        turtles: model.turtles ?? [],
+        insideBreed: model.inside,
+        wallBreed: model.wall,
+        exitCount: model.exits?.length ?? 0,
+        insidePatchCount: model.inside?.length ?? 0
+    })
+
+    return agentStatsTracker.capture(snapshot)
+}
