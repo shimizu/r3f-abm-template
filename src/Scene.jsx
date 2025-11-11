@@ -1,15 +1,16 @@
-import { useEffect, useState, useRef, useMemo } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { OrbitControls, RandomizedLight, Grid, Environment } from "@react-three/drei"
-import * as THREE from "three"
 import { useControls, button } from "leva"
 import { useFrame, useThree } from "@react-three/fiber";
-import { Bloom, EffectComposer } from "@react-three/postprocessing";
-import chroma from 'chroma-js';
 import { useSpring, animated, config } from '@react-spring/three' // react-spring から config をインポート
 
-import { MenModel } from "./men.jsx"
+import { MenModel } from "./agents/men.jsx"
 
 import { stepSimulation, resetSimulation, model } from './agentScript.js';
+
+
+//テスト読み込み
+import {Curved, Junction, Straight, Tsplit } from "./walls/index.jsx"
 
 // MenModelのアニメーション版を作成する
 const AnimatedMenModel = animated(MenModel);
@@ -59,38 +60,126 @@ function AgentMen({ agents }) {
  * @param {{patches: Object}} props - パッチデータ
  */
 function PatchesSphere({ patches }) {
-    const meshRef = useRef();
-
-    // パフォーマンス向上のため、ジオメトリとマテリアルをメモ化
-    const geometry = useMemo(() => new THREE.BoxGeometry(1, 2, 1), []);
-    const material = useMemo(() => new THREE.MeshPhongMaterial({ color: 0x666666 }), []);
-
-    // AgentScriptモデルから壁のデータを取得
     const wall = patches.breeds.wall;
+    const wallTiles = useMemo(() => {
+        if (!wall || wall.length === 0) return [];
 
-    useEffect(() => {
-        if (meshRef.current) {
-            wall.forEach((patch, i) => {
-                // 各インスタンス（壁ブロック）の位置を設定
-                const matrix = new THREE.Matrix4();
-                matrix.makeTranslation(
-                    patch.x,  // X座標
-                    0.5,      // Y座標（固定）
-                    patch.y   // Z座標
-                );
+        const wallLookup = new Set();
+        wall.forEach(patch => {
+            wallLookup.add(`${patch.x}:${patch.y}`);
+        });
 
-                // インスタンスに変換行列を適用
-                meshRef.current.setMatrixAt(i, matrix);
+        const tiles = [];
+        wall.forEach(patch => {
+            const neighbors = {
+                north: wallLookup.has(`${patch.x}:${patch.y + 1}`),
+                east: wallLookup.has(`${patch.x + 1}:${patch.y}`),
+                south: wallLookup.has(`${patch.x}:${patch.y - 1}`),
+                west: wallLookup.has(`${patch.x - 1}:${patch.y}`)
+            };
+
+            const { type, rotation } = classifyWallTile(neighbors);
+            const Component = WALL_COMPONENTS[type] ?? WALL_COMPONENTS.straight;
+
+            tiles.push({
+                id: `wall-${patch.x}-${patch.y}`,
+                Component,
+                rotation,
+                position: [patch.x, 0, patch.y]
             });
-            // 位置の変更をGPUに通知
-            meshRef.current.instanceMatrix.needsUpdate = true;
-        }
-    }, [wall]); // wallデータが変更されたときにのみ実行
+        });
+
+        return tiles;
+    }, [wall]);
 
     return (
-        // InstancedMeshを使用して多数の壁ブロックを効率的に描画
-        <instancedMesh ref={meshRef} args={[geometry, material, wall.length]} />
+        <group>
+            {wallTiles.map(tile => {
+                const TileComponent = tile.Component;
+                return (
+                    <TileComponent
+                        key={tile.id}
+                        position={tile.position}
+                        rotation={[0, tile.rotation, 0]}
+                    />
+                );
+            })}
+        </group>
     );
+}
+
+const WALL_COMPONENTS = {
+    straight: Straight,
+    corner: Curved,
+    threeWay: Tsplit,
+    fourWay: Junction,
+    end: Straight
+};
+
+const directionAngles = {
+    north: 0,
+    east: Math.PI / 2,
+    south: Math.PI,
+    west: -Math.PI / 2
+};
+
+function classifyWallTile(neighbors) {
+    const connectedDirs = Object.entries(neighbors)
+        .filter(([, isConnected]) => isConnected)
+        .map(([dir]) => dir);
+
+    const count = connectedDirs.length;
+
+    if (count === 4) {
+        return { type: 'fourWay', rotation: 0 };
+    }
+
+    if (count === 3) {
+        const missing = ['north', 'east', 'south', 'west'].find(dir => !neighbors[dir]) || 'south';
+        return { type: 'threeWay', rotation: rotationByMissingSide(missing) };
+    }
+
+    if (count === 2) {
+        const hasNorthSouth = neighbors.north && neighbors.south;
+        const hasEastWest = neighbors.east && neighbors.west;
+
+        if (hasNorthSouth || hasEastWest) {
+            const rotation = hasNorthSouth ? 0 : Math.PI / 2;
+            return { type: 'straight', rotation };
+        }
+
+        return { type: 'corner', rotation: rotationForCorner(neighbors) };
+    }
+
+    if (count === 1) {
+        const dir = connectedDirs[0];
+        return { type: 'end', rotation: directionAngles[dir] ?? 0 };
+    }
+
+    return { type: 'end', rotation: 0 };
+}
+
+function rotationForCorner(neighbors) {
+    if (neighbors.north && neighbors.east) return 0;
+    if (neighbors.east && neighbors.south) return Math.PI / 2;
+    if (neighbors.south && neighbors.west) return Math.PI;
+    if (neighbors.west && neighbors.north) return -Math.PI / 2;
+    return 0;
+}
+
+function rotationByMissingSide(missing) {
+    switch (missing) {
+        case 'south':
+            return 0;
+        case 'west':
+            return Math.PI / 2;
+        case 'north':
+            return Math.PI;
+        case 'east':
+            return -Math.PI / 2;
+        default:
+            return 0;
+    }
 }
 
 /**
@@ -157,6 +246,7 @@ function Scene() {
                 <AgentMen agents={agents} />
                 <PatchesSphere patches={model.patches} />
             </group>
+
 
             {/* 地面のグリッド */}
             <group position={[0.5, -0.5, 0.5]}>

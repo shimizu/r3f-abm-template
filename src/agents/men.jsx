@@ -3,7 +3,7 @@ import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 
 export function MenModel(props) {
-  const { nodes, materials } = useGLTF('./model/men.glb')
+  const { nodes, materials } = useGLTF('./model/agents/men.glb')
 
   useEffect(() => {
     // Make the model brighter
@@ -79,4 +79,4 @@ export function MenModel(props) {
   )
 }
 
-useGLTF.preload('./model/men.glb')
+useGLTF.preload('./model/agents/men.glb')
