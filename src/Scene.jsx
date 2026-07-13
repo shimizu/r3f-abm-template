@@ -1,12 +1,13 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useMemo } from "react"
 import { OrbitControls, RandomizedLight, Grid, Environment, Html } from "@react-three/drei"
 import { useControls, button } from "leva"
-import { useThree } from "@react-three/fiber";
 import { useSpring, animated, config } from '@react-spring/three' // react-spring から config をインポート
 
 import { MenModel } from "./agents/men.jsx"
 
-import { stepSimulation, resetSimulation, model, agentStatsTracker } from './agentScript.js';
+import { exitSimulationDefinition } from './agentScript.js';
+import { createSimulationRuntime } from './simulation/createSimulationRuntime.js'
+import { useSimulation } from './simulation/useSimulation.js'
 
 
 //テスト読み込み
@@ -20,12 +21,11 @@ const AnimatedMenModel = animated(MenModel);
  * @param {{agent: Object}} props - The agent data.
  */
 function Agent({ agent }) {
-    const { position, theta } = agent;
+    const { position, rotation } = agent;
 
     const { springPosition } = useSpring({
         to: {
-            springPosition: [position[0], -0.5, position[2]], //次の移動位置までアニメーション
-            springRotation: [0, theta, 0], // 回転をアニメーションさせる場合
+            springPosition: position, //次の移動位置までアニメーション
         },
         // バウンスしないように、アニメーションの挙動を 'gentle' (穏やか) に設定
         config: config.gentle,
@@ -34,7 +34,7 @@ function Agent({ agent }) {
     return (
         <AnimatedMenModel
             position={springPosition}
-            rotation={[0, theta, 0]} //回転は即時反映の方が動きがよい
+            rotation={rotation} //回転は即時反映の方が動きがよい
         />
     );
 }
@@ -60,12 +60,13 @@ function AgentMen({ agents }) {
  * @param {{patches: Object}} props - パッチデータ
  */
 function PatchesSphere({ patches, debugOptions = {} }) {
-    // AgentScript 側の wall ブリード（壁パッチ集合）を取得
-    const wall = patches.breeds.wall;
     const { useBoxWalls = false } = debugOptions;
 
     // 壁パッチ配列からタイプ判定済みの描画タイル情報を生成
-    const wallTiles = useMemo(() => buildWallTiles(wall), [wall]);
+    const wallTiles = useMemo(
+        () => buildWallTiles(patches.filter(patch => patch.type === 'wall')),
+        [patches]
+    );
 
     return (
         <group>
@@ -101,72 +102,42 @@ function PatchesSphere({ patches, debugOptions = {} }) {
  * シミュレーションの制御、エージェントと環境のレンダリングを管理
  */
 function Scene() {
-    // シミュレーションのエージェントの状態を管理
-    const [agents, setAgents] = useState([]);
-    const [agentStats, setAgentStats] = useState(() => agentStatsTracker.getLatest?.() ?? null);
-    let intervalID; // シミュレーションのインターバルID
+    const runtime = useMemo(
+        () => createSimulationRuntime(exitSimulationDefinition),
+        []
+    );
+    const {
+        isRunning,
+        snapshot,
+        start,
+        step,
+        stop,
+        reset,
+    } = useSimulation(runtime);
 
-    // Leva UIコントロール（開始・リセット・ステップ実行ボタン）
+    // Leva UIコントロール（開始・停止・リセット・ステップ実行ボタン）
     useControls('Simulation', {
-        start: button(() => {
-            // インターバルがなければ、シミュレーションを開始
-            if (!intervalID) {
-                intervalID = setInterval(() => {
-                    setp();
-                }, 220); // 110msごとにステップを実行
-            }
-        }),
-        reset: button(() => {
-            // シミュレーションを停止し、リセット
-            clearInterval(intervalID);
-            intervalID = undefined;
-            resetSimulation();
-            setp(); // 初期状態を反映
-        }),
-        step: button(() => {
-            setp();
-        })
+        start: button(start),
+        pause: button(stop),
+        reset: button(reset),
+        step: button(step),
     });
 
     const wallDebugControls = useControls('Wall Debug', {
         useBoxWalls: false
     });
 
-    // シミュレーションを1ステップ進め、エージェントの状態を更新する関数
-    const setp = () => {
-        const updatedAgents = stepSimulation();
-        setAgents(updatedAgents);
-    };
-
-    // コンポーネントのマウント時にシミュレーションを初期化
     useEffect(() => {
-        setp();
-        const unsubscribe = agentStatsTracker.subscribe(snapshot => {
-            setAgentStats(snapshot);
-        });
-
-        return () => {
-            unsubscribe();
-            if (intervalID) {
-                clearInterval(intervalID);
-            }
-        };
-    }, []);
-
-    const { camera } = useThree();
-
-    // カメラの位置をデバッグするために使用
-    const handleCamera = () => {
-        // console.log(camera.position);
-    };
+        return () => runtime.stop();
+    }, [runtime]);
 
     return (
         <>
-            <AgentStatsPanel stats={agentStats} />
+            <AgentStatsPanel stats={snapshot.metrics} isRunning={isRunning} />
 
 
             {/* カメラコントロール（オービット） */}
-            <OrbitControls onChange={handleCamera} />
+            <OrbitControls />
 
             <Environment preset="sunset" />
 
@@ -175,8 +146,8 @@ function Scene() {
 
             {/* エージェントと壁を含むグループ */}
             <group>
-                <AgentMen agents={agents} />
-                <PatchesSphere patches={model.patches} debugOptions={wallDebugControls} />
+                <AgentMen agents={snapshot.agents} />
+                <PatchesSphere patches={snapshot.patches} debugOptions={wallDebugControls} />
             </group>
 
 
@@ -198,10 +169,11 @@ function Scene() {
     );
 }
 
-function AgentStatsPanel({ stats }) {
+function AgentStatsPanel({ stats, isRunning }) {
     if (!stats) return null;
 
     const rows = [
+        { label: 'Status', value: isRunning ? 'Running' : 'Paused' },
         { label: 'Tick', value: stats.tick },
         { label: 'Agents', value: stats.totalAgents },
         { label: 'Inside', value: stats.insideAgents },

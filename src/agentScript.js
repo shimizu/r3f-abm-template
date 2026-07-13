@@ -1,12 +1,6 @@
 // AgentScriptライブラリから必要なクラスをインポート
 import { Model, World, DataSet } from 'agentscript';
-import { agentStatsTracker, buildAgentSnapshot } from './agentStats.js'
-
-// レイアウトデータをインポート（部屋の構造定義）
-import { layout, layout2 } from './layout';
-
-
-
+import { buildAgentSnapshot } from './agentStats.js'
 
 // パッチレイアウトデータ（16x16グリッド）
 // 0: 内部（歩行可能）, 1: 壁（通行不可）, 2: 出口
@@ -136,57 +130,40 @@ export default class ExitModel extends Model {
     }
 }
 
-// シミュレーションモデルのインスタンスを作成
-let model = new ExitModel()
-
-// モデルの起動と初期設定を実行
-model.startup()  // AgentScriptの基本初期化
-model.setup()    // カスタム設定の実行
-captureAgentStats()
-
-// デバッグ用ログ（コメントアウト）
-// console.log("patches", model.exits)  // 出口パッチの確認
-// console.log("turtles", model.turtles)  // エージェントの確認
-
-
-
-// シミュレーションを1ステップ進める関数
-// React Three Fiberでの描画用にエージェントデータを取得
-function stepSimulation() {
-    model.step()  // シミュレーション計算を1ステップ実行
-    captureAgentStats()
-
-    // 全エージェントの現在状態を3D描画用に変換
-    const agents = model.turtles.map(t => {
-        return {
-            id: t.id, // Add this
-            position: [t.x, 0, t.y],  // 3D座標（Y軸は高さ0で固定）
-            theta: 180 -t.theta,            // エージェントの向き（角度）
-            exitID: t.exit.id      // 目標とする出口のID
-        }
-    })
-
-    return agents;  // エージェント状態データを返す
+export const exitSimulationDefinition = {
+    id: 'exit',
+    label: 'Evacuation',
+    defaultConfig: {
+        population: 0.25,
+        stepsPerSecond: 1000 / 220,
+    },
+    createModel(config) {
+        const model = new ExitModel(config.worldOptions)
+        model.population = config.population
+        return model
+    },
+    initialize(model) {
+        model.startup()
+        model.setup()
+        model.initialAgentCount = model.turtles.length
+        model.visualPatches = model.patches.map(patch => ({
+            id: `patch-${patch.x}-${patch.y}`,
+            type: getPatchType(model, patch),
+            position: [patch.x, -0.5, patch.y],
+            x: patch.x,
+            y: patch.y,
+            properties: {
+                map: patch.map,
+            },
+        }))
+    },
+    toSnapshot(model) {
+        return createExitSnapshot(model)
+    },
 }
 
-// シミュレーションを初期状態にリセットする関数
-function resetSimulation() {
-    // 新しいモデルインスタンスを作成（完全リセット）
-    model = new ExitModel()
-    model.startup()  // AgentScriptの基本初期化
-    agentStatsTracker.clear()
-    model.setup()    // カスタム設定の再実行
-    captureAgentStats()
-}
-
-
-// React側で使用する関数とモデルをエクスポート
-export { stepSimulation, resetSimulation, model, agentStatsTracker };
-
-function captureAgentStats() {
-    if (!model) return null
-
-    const snapshot = buildAgentSnapshot({
+function createExitSnapshot(model) {
+    const metrics = buildAgentSnapshot({
         tick: model.ticks ?? 0,
         turtles: model.turtles ?? [],
         insideBreed: model.inside,
@@ -195,5 +172,34 @@ function captureAgentStats() {
         insidePatchCount: model.inside?.length ?? 0
     })
 
-    return agentStatsTracker.capture(snapshot)
+    const totalAgents = model.initialAgentCount ?? metrics.aliveAgents
+
+    return {
+        tick: model.ticks ?? 0,
+        agents: model.turtles.map(turtle => ({
+            id: turtle.id,
+            type: 'person',
+            position: [turtle.x, -0.5, turtle.y],
+            rotation: [0, 180 - turtle.theta, 0],
+            color: '#ffffff',
+            state: turtle.patch?.breed === model.inside ? 'inside' : 'exiting',
+            properties: {
+                exitId: turtle.exit?.id ?? null,
+            },
+        })),
+        patches: model.visualPatches ?? [],
+        metrics: {
+            ...metrics,
+            totalAgents,
+            exitedAgents: Math.max(0, totalAgents - metrics.aliveAgents),
+        },
+    }
+}
+
+function getPatchType(model, patch) {
+    if (patch.breed === model.wall) return 'wall'
+    if (patch.breed === model.exits) return 'exit'
+    if (patch.breed === model.inside) return 'inside'
+    if (patch.breed === model.empty) return 'empty'
+    return 'default'
 }
