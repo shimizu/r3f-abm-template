@@ -1,5 +1,5 @@
 // AgentScriptライブラリから必要なクラスをインポート
-import { Model, World, DataSet, RGBADataSet } from 'agentscript';
+import { Model, World, DataSet } from 'agentscript';
 import { agentStatsTracker, buildAgentSnapshot } from './agentStats.js'
 
 // レイアウトデータをインポート（部屋の構造定義）
