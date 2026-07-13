@@ -139,7 +139,7 @@ export const simulationDefinition = {
 - テンプレート本体に `exit`、`wall`、`blocked` などの避難固有概念が残らない。
 - Registry の定義を切り替えるだけでモデルを変更できる。
 
-### Phase 3: 標準モデルと標準 Renderer
+### Phase 3: 標準モデルと標準 Renderer ✅
 
 - 最小の `examples/basic/` を追加する。
 - 球による Agent Renderer と箱による Patch Renderer を用意する。

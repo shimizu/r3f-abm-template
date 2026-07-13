@@ -1,22 +1,34 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { Environment, Grid, OrbitControls, RandomizedLight } from '@react-three/drei'
 import { button, useControls } from 'leva'
 
-import { defaultSimulation } from './examples/registry.js'
+import {
+  defaultSimulation,
+  getSimulation,
+  simulationOptions,
+} from './examples/registry.js'
 import { createSimulationRuntime } from './simulation/createSimulationRuntime.js'
 import { useSimulation } from './simulation/useSimulation.js'
 
-const { controls, definition, renderers } = defaultSimulation
-const {
-  Agents: AgentsRenderer,
-  Metrics: MetricsRenderer,
-  Patches: PatchesRenderer,
-} = renderers
-
 function Scene() {
+  const { simulationId } = useControls('Template', {
+    simulationId: {
+      label: 'Model',
+      value: defaultSimulation.definition.id,
+      options: simulationOptions,
+    },
+  })
+  const activeSimulation = getSimulation(simulationId)
+  const { controls, definition, renderers } = activeSimulation
+  const {
+    Agents: AgentsRenderer,
+    Metrics: MetricsRenderer,
+    Patches: PatchesRenderer,
+  } = renderers
+
   const runtime = useMemo(
     () => createSimulationRuntime(definition),
-    []
+    [definition]
   )
   const {
     isRunning,
@@ -25,18 +37,42 @@ function Scene() {
     step,
     stop,
     reset,
+    setStepsPerSecond,
+    stepsPerSecond,
   } = useSimulation(runtime)
 
-  useControls('Simulation', {
-    start: button(start),
-    pause: button(stop),
-    reset: button(reset),
-    step: button(step),
-  })
+  const modelConfig = useControls(
+    'Model Parameters',
+    controls.model ?? {},
+    [definition.id]
+  )
+  const resetWithConfig = useCallback(
+    () => reset(modelConfig),
+    [modelConfig, reset]
+  )
+
+  useControls(
+    'Simulation',
+    {
+      speed: {
+        value: stepsPerSecond,
+        min: 1,
+        max: 30,
+        step: 1,
+        onChange: setStepsPerSecond,
+      },
+      start: button(start),
+      pause: button(stop),
+      reset: button(resetWithConfig),
+      step: button(step),
+    },
+    [runtime, resetWithConfig]
+  )
 
   const visualizationOptions = useControls(
     'Visualization',
-    controls.visualization ?? {}
+    controls.visualization ?? {},
+    [definition.id]
   )
 
   useEffect(() => {

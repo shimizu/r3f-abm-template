@@ -28,6 +28,10 @@ export default [
       ...react.configs.recommended.rules,
       ...react.configs['jsx-runtime'].rules,
       ...reactHooks.configs.recommended.rules,
+      // React Three Fiber uses JSX props that are not DOM properties.
+      'react/no-unknown-property': 'off',
+      // This template uses plain snapshot contracts instead of runtime PropTypes.
+      'react/prop-types': 'off',
       'react/jsx-no-target-blank': 'off',
       'react-refresh/only-export-components': [
         'warn',
