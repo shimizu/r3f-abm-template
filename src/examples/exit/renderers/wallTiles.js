@@ -1,4 +1,5 @@
 import { Curved, Junction, Straight, Tsplit, End } from './WallModels.jsx'
+import { classifyWallTile } from './wallClassification.js'
 
 // 壁タイプと描画に使う GLTF コンポーネントの対応表。
 // End だけ専用メッシュを用意しているため straight と分岐させている。
@@ -48,74 +49,4 @@ export function buildWallTiles(wallPatches) {
       type
     }
   })
-}
-
-// 連結方向の組み合わせから壁タイルの形状タイプと回転角を判定する。
-function classifyWallTile(neighbors) {
-  const connectedDirs = Object.entries(neighbors)
-    .filter(([, isConnected]) => isConnected)
-    .map(([dir]) => dir)
-
-  const count = connectedDirs.length
-
-  if (count === 4) {
-    return { type: 'fourWay', rotation: 0 }
-  }
-
-  if (count === 3) {
-    const missing = ['north', 'east', 'south', 'west'].find(dir => !neighbors[dir]) || 'south'
-    return { type: 'threeWay', rotation: rotationByMissingSide(missing) }
-  }
-
-  if (count === 2) {
-    const hasNorthSouth = neighbors.north && neighbors.south
-    const hasEastWest = neighbors.east && neighbors.west
-
-    if (hasNorthSouth || hasEastWest) {
-      const rotation = hasNorthSouth ? 0 : Math.PI / 2
-      return { type: 'straight', rotation }
-    }
-
-    return { type: 'corner', rotation: rotationForCorner(neighbors) }
-  }
-
-  if (count === 1) {
-    const dir = connectedDirs[0]
-    return { type: 'end', rotation: directionAngles[dir] ?? 0 }
-  }
-
-  return { type: 'end', rotation: 0 }
-}
-
-// 単方向接続（終端）で利用する方角→ラジアンの変換テーブル。
-const directionAngles = {
-  north: 0,
-  east: Math.PI / 2,
-  south: Math.PI,
-  west: -Math.PI / 2
-}
-
-// 2方向接続（コーナー）の場合、接続方角の組み合わせに応じて回転角を返す。
-function rotationForCorner(neighbors) {
-  if (neighbors.north && neighbors.east) return 0
-  if (neighbors.east && neighbors.south) return Math.PI / 2
-  if (neighbors.south && neighbors.west) return Math.PI
-  if (neighbors.west && neighbors.north) return -Math.PI / 2
-  return 0
-}
-
-// 3方向接続（T字）時に欠けている方角を基準に回転を算出する。
-function rotationByMissingSide(missing) {
-  switch (missing) {
-    case 'south':
-      return 0
-    case 'west':
-      return Math.PI / 2
-    case 'north':
-      return Math.PI
-    case 'east':
-      return -Math.PI / 2
-    default:
-      return 0
-  }
 }

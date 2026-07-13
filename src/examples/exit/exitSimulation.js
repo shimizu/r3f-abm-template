@@ -6,10 +6,11 @@ export const exitSimulation = {
   label: 'Evacuation',
   defaultConfig: {
     population: 0.25,
+    seed: 1234,
     stepsPerSecond: 1000 / 220,
   },
   createModel(config) {
-    const model = new ExitModel(config.worldOptions)
+    const model = new ExitModel(config)
     model.population = config.population
     return model
   },

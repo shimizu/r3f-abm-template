@@ -1,5 +1,6 @@
 // AgentScriptライブラリから必要なクラスをインポート
 import { Model, World, DataSet } from 'agentscript';
+import { createSeededRandom } from '../../simulation/createSeededRandom.js'
 import { exitDemoLayout } from './layout.js'
 
 // パッチレイアウトデータ（16x16グリッド）
@@ -20,8 +21,10 @@ export default class ExitModel extends Model {
 
     // コンストラクタ: シミュレーション世界を初期化
     // デフォルトで8x8の世界サイズを設定
-    constructor(worldOptions = World.defaultOptions(8, 8)) {
+    constructor(config = {}) {
+        const worldOptions = config.worldOptions ?? World.defaultOptions(8, 8)
         super(worldOptions)  // 親クラスModelのコンストラクタを呼び出し
+        this.random = createSeededRandom(config.seed)
     }
 
     // シミュレーションのセットアップメソッド
@@ -66,13 +69,16 @@ export default class ExitModel extends Model {
     setupTurtles() {
         // 内部パッチからランダムに選択してエージェントを配置
         // 配置数 = 内部パッチ数 × population（密度）
-        const turtlePatches = this.inside.nOf(
-            this.population * this.inside.length
+        const turtlePatches = sampleWithoutReplacement(
+            this.inside,
+            Math.floor(this.population * this.inside.length),
+            this.random
         )
 
         // 選択されたパッチにエージェントを1体ずつ配置
-        turtlePatches.ask(p => {
+        turtlePatches.forEach(p => {
             p.sprout(1, this.turtles, t => {
+                t.heading = this.random() * 360
                 // 各エージェントに最も近い出口を割り当て（避難目標として設定）
                 t.exit = this.exits.minOneOf(e => t.distance(e))
             })
@@ -109,4 +115,20 @@ export default class ExitModel extends Model {
             }
         })
     }
+}
+
+function sampleWithoutReplacement(values, count, random) {
+    const candidates = [...values]
+    const sampleSize = Math.min(Math.max(count, 0), candidates.length)
+
+    for (let index = 0; index < sampleSize; index += 1) {
+        const selectedIndex = index + Math.floor(
+            random() * (candidates.length - index)
+        )
+        const selected = candidates[selectedIndex]
+        candidates[selectedIndex] = candidates[index]
+        candidates[index] = selected
+    }
+
+    return candidates.slice(0, sampleSize)
 }

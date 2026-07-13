@@ -1,4 +1,8 @@
 import { Model, World } from 'agentscript'
+import {
+  createSeededRandom,
+  randomBetween,
+} from '../../simulation/createSeededRandom.js'
 
 export default class BasicModel extends Model {
   constructor(config) {
@@ -25,23 +29,6 @@ export default class BasicModel extends Model {
       turtle.forward(0.2)
     })
   }
-}
-
-function createSeededRandom(seed) {
-  let state = Number(seed) >>> 0
-  if (state === 0) state = 0x6d2b79f5
-
-  return () => {
-    state += 0x6d2b79f5
-    let value = state
-    value = Math.imul(value ^ (value >>> 15), value | 1)
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61)
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-function randomBetween(random, min, max) {
-  return min + random() * (max - min)
 }
 
 function normalizePositiveInteger(value, fallback) {

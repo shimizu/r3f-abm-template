@@ -1,224 +1,309 @@
-# React Three Fiber + AgentScript (ABM) Template
+# React Three Fiber + AgentScript ABM Template
 
-React Three Fiber (R3F) と AgentScript を使用して、ブラウザ上でエージェントベースモデリング (ABM) を構築・可視化するためのテンプレートプロジェクトです。避難シミュレーションをデモとして実装しています。
+AgentScriptで構築したエージェントベースモデルを、React Three Fiberでインタラクティブに可視化するためのテンプレートです。
 
-## 📋 概要
+モデル、実行ループ、React状態、3D Rendererを分離しているため、新しいABMはモデル定義とSnapshot adapterを追加するだけで動かせます。専用3Dアセットがないモデルには、`instancedMesh`を使った標準Rendererを利用できます。
 
-このプロジェクトは、3D空間で動作するエージェントベースモデル（ABM）を `React Three Fiber` で可視化するための基本的な構造を提供します。
-デモとして、特定の環境からのエージェント避難シミュレーションが含まれています。このテンプレートをベースに、独自のエージェントモデルやインタラクションを構築することが可能です。
+## 主な機能
 
-## 🛠 技術スタック
+- AgentScriptモデルのstart / pause / step / reset
+- モデルごとの速度、seed、パラメータ設定
+- シリアライズ可能なSnapshotを介した描画層との分離
+- basic / exitサンプルの実行時切り替え
+- 球と箱による標準Renderer
+- モデル固有GLTF Rendererへの差し替え
+- 数千エージェント向けのinstanced rendering
+- 描画FPS、シミュレーションSPS、step処理時間の計測
+- seedによる決定的なシミュレーション
+- Runtime、adapter、Snapshot、壁分類の自動テスト
 
-### フロントエンド
-- **React 18** - ユーザーインターフェース
-- **React Three Fiber** - Three.js の React ラッパー（3D レンダリング）
-- **@react-three/drei** - R3F 用ヘルパーライブラリ
-- **@react-three/postprocessing** - 視覚効果（Bloom エフェクト）
-- **Leva** - リアルタイム GUI コントロール
-
-### シミュレーション
-- **AgentScript** - エージェントベースモデリングフレームワーク
-- **Chroma.js** - カラーマネジメント
-
-### 開発・ビルド
-- **Vite** - 高速開発サーバー・ビルドツール
-- **ESLint** - コード品質管理
-
-## 🚀 セットアップ・実行
+## セットアップ
 
 ```bash
-# 依存関係のインストール
 npm install
-
-# 開発サーバーの起動
 npm run dev
-
-# プロダクションビルド
-npm run build
-
-# コードチェック
-npm run lint
 ```
 
-## 🏗 アーキテクチャ
+開発サーバーは通常 `http://localhost:5173` で起動します。
 
-### システム構成
+## コマンド
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   React UI      │───▶│ AgentScript      │───▶│ Three.js        │
-│   (Leva GUI)    │    │ Simulation       │    │ 3D Rendering    │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-        │                       │                       │
-        │                       │                       │
-        ▼                       ▼                       ▼
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│ User Controls   │    │ Agent Behaviors  │    │ Visual Output   │
-│ - Start/Stop    │    │ - Pathfinding    │    │ - Agent Spheres │
-│ - Reset         │    │ - Exit Selection │    │ - Environment   │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+```bash
+npm run dev      # 開発サーバー
+npm run build    # production build
+npm run preview  # build結果の確認
+npm run lint     # ESLint
+npm test         # Node標準テスト
 ```
 
-### コンポーネント階層
+## アーキテクチャ
 
-```
-App.jsx
-├── Canvas (React Three Fiber)
-    └── Scene.jsx
-        ├── AgentSphere (エージェント描画)
-        ├── PatchesSphere (環境描画)
-        ├── OrbitControls (カメラ操作)
-        ├── RandomizedLight (照明)
-        └── Grid (グリッド表示)
+```text
+AgentScript Model
+  -> Model Adapter
+  -> Serializable Snapshot
+  -> Simulation Runtime
+  -> useSimulation
+  -> React Three Fiber Renderer / Metrics UI
 ```
 
-## 🧮 シミュレーション原理
+### Simulation definition
 
-### エージェントベースモデル（ABM）
+各モデルは共通のdefinitionを公開します。
 
-1. **パッチベース世界モデル**
-   ```javascript
-   // 環境の離散化表現
-   0: inside  // 歩行可能エリア
-   1: wall    // 通行不可（壁）
-   2: exits   // 避難目標（出口）
-   3: empty   // 外部空間
-   ```
-
-2. **エージェント行動ルール**
-   ```javascript
-   // 各ステップでの意思決定プロセス
-   if (agent.location === 'inside') {
-     // 1. 移動可能な隣接パッチを探索
-     // 2. 目標出口に最も近いパッチを選択
-     // 3. 現在位置より出口に近づける場合のみ移動
-   } else {
-     // 外部到達後は直進継続（避難完了）
-   }
-   ```
-
-3. **距離ベース経路選択**
-   - ユークリッド距離による最短経路探索
-   - 局所的最適化（貪欲法）
-   - 衝突回避（1パッチ1エージェント制約）
-
-### 3D 可視化システム
-
-#### インスタンスレンダリング
-```javascript
-// パフォーマンス最適化のための大量オブジェクト描画
-<instancedMesh ref={meshRef} args={[geometry, material, agentCount]} />
-```
-
-#### 動的カラーリング
-```javascript
-// 出口IDに基づくエージェント色分け
-const colors = {
-  'E15:38': 0xff0000,  // 赤系出口
-  'E37:20': 0x0000ff,  // 青系出口
-  'E0:19':  0xffff00,  // 黄系出口
-  'E34:0':  0x00ffff   // シアン系出口
+```js
+export const exampleSimulation = {
+  id: 'example',
+  label: 'Example',
+  defaultConfig: {
+    seed: 1234,
+    stepsPerSecond: 8,
+  },
+  createModel(config) {
+    return new ExampleModel(config)
+  },
+  initialize(model, config) {
+    model.startup()
+    model.setup()
+  },
+  toSnapshot(model, config) {
+    return createExampleSnapshot(model)
+  },
 }
 ```
 
-## 📊 データフロー
+Runtimeは次の操作を提供します。
 
-### シミュレーションループ
+```js
+const runtime = createSimulationRuntime(exampleSimulation)
 
-```mermaid
-graph TD
-    A[User Input] --> B["AgentScript.step()"]
-    B --> C[Agent Position Update]
-    C --> D[React State Update]
-    D --> E[Three.js Re-render]
-    E --> F[Visual Frame]
-    F --> A
+runtime.start()
+runtime.stop()
+runtime.step()
+runtime.reset({ seed: 999 })
+runtime.setStepsPerSecond(10)
+runtime.subscribe(() => runtime.getState())
+runtime.dispose()
 ```
 
-### 状態管理
+### Snapshot contract
 
-1. **AgentScript モデル** - シミュレーション状態
-2. **React State** - UI 状態・エージェント位置
-3. **Three.js Scene** - 3D オブジェクト状態
+ReactとRendererにはAgentScriptオブジェクトを渡さず、プレーンなSnapshotへ変換します。
 
-## 🎯 主要機能
-
-### シミュレーション制御
-- **Start**: 自動ステップ実行開始（110ms間隔）
-- **Reset**: シミュレーション完全リセット
-
-### 可視化機能
-- エージェント位置のリアルタイム更新
-- 出口別エージェント色分け
-- 環境構造（壁・出口）の3D表示
-- インタラクティブカメラ操作
-
-### 分析機能
-- エージェント密度の調整（population パラメータ）
-- 複数レイアウトの切り替え対応
-- パフォーマンス最適化された大規模シミュレーション
-
-## 📈 パフォーマンス最適化
-
-### レンダリング最適化
-- **インスタンスレンダリング** - 同一ジオメトリの効率的描画
-- **コードスプリッティング** - ライブラリ別チャンク分割
-- **フレームレート制御** - 110ms 間隔のシミュレーション更新
-
-### メモリ最適化
-- ジオメトリ・マテリアルの再利用
-- エージェント状態の差分更新
-- 不要なオブジェクト参照の削除
-
-## 🔧 開発・拡張
-
-### 新規レイアウト追加
-```javascript
-// src/layout.js に新しい配列を追加
-export const newLayout = [
-  // グリッドデータ定義
-]
-
-// src/agentScript.js でレイアウト選択
-const map = new DataSet(width, height, newLayout)
+```js
+{
+  tick: 0,
+  agents: [
+    {
+      id: 'agent-1',
+      type: 'default',
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      color: '#4dabf7',
+      state: 'active',
+      properties: {},
+    },
+  ],
+  patches: [
+    {
+      id: 'patch-0-0',
+      type: 'ground',
+      position: [0, -0.5, 0],
+      color: '#273142',
+      properties: {},
+    },
+  ],
+  metrics: {
+    agents: 1,
+  },
+}
 ```
 
-### エージェント行動カスタマイズ
-```javascript
-// ExitModel.step() メソッドを編集
-// 新しい行動ルールを実装
+`assertSimulationSnapshot`を使うと、adapterが返すSnapshotの基本構造を検証できます。
+
+## ディレクトリ構成
+
+```text
+src/
+├── examples/
+│   ├── registry.js
+│   ├── basic/
+│   │   ├── BasicModel.js
+│   │   ├── adapter.js
+│   │   ├── basicSimulation.js
+│   │   └── config.js
+│   └── exit/
+│       ├── ExitModel.js
+│       ├── exitAdapter.js
+│       ├── exitMetrics.js
+│       ├── exitSimulation.js
+│       ├── layout.js
+│       └── renderers/
+├── rendering/
+│   ├── DefaultRenderers.jsx
+│   └── useRenderPerformance.js
+├── simulation/
+│   ├── createSeededRandom.js
+│   ├── createSimulationRuntime.js
+│   ├── snapshot.js
+│   └── useSimulation.js
+├── App.jsx
+├── Scene.jsx
+└── main.jsx
 ```
 
-### ビジュアル拡張
-```javascript
-// Scene.jsx でレンダリングコンポーネント追加
-// 新しい視覚化要素の実装
+`reflence/` はAgentScriptの資料・入力置き場であり、アプリケーションコードやlintの対象ではありません。
+
+## 新しいモデルの追加方法
+
+### 1. AgentScriptモデルを作成する
+
+`src/examples/my-model/MyModel.js` を追加します。
+
+```js
+import { Model, World } from 'agentscript'
+
+export default class MyModel extends Model {
+  constructor(config) {
+    super(World.defaultOptions(10, 10))
+    this.config = config
+  }
+
+  setup() {
+    this.turtles.create(this.config.agentCount)
+  }
+
+  step() {
+    this.turtles.ask(turtle => turtle.forward(0.1))
+  }
+}
 ```
 
-## 📝 技術的制約・考慮事項
+再現可能な乱数が必要な場合は `createSeededRandom(config.seed)` を利用してください。モデル内で直接 `Math.random()` を使わないことが重要です。
 
-### シミュレーション精度
-- 離散空間モデル（連続空間ではない）
-- 局所最適化による経路選択（大域最適ではない）
-- 単純化された人間行動モデル
+### 2. Snapshot adapterを作成する
 
-### パフォーマンス制約
-- ブラウザのJavaScript実行性能に依存
-- WebGL対応デバイスが必要
-- 大規模エージェント数での性能劣化可能性
+`src/examples/my-model/adapter.js` を追加します。
 
-### 拡張性
-- AgentScript フレームワークの機能制約
-- React Three Fiber のバージョン依存
-- Three.js の機能制限
+```js
+export function initializeMyModel(model) {
+  model.startup()
+  model.setup()
+}
 
-## 📚 参考文献・関連技術
+export function createMySnapshot(model) {
+  return {
+    tick: model.ticks,
+    agents: model.turtles.map(turtle => ({
+      id: turtle.id,
+      type: 'default',
+      position: [turtle.x, 0, turtle.y],
+      rotation: [0, -turtle.theta, 0],
+      color: '#4dabf7',
+      state: 'active',
+      properties: {},
+    })),
+    patches: [],
+    metrics: {
+      agents: model.turtles.length,
+    },
+  }
+}
+```
 
-- [AgentScript](https://github.com/backspaces/agentscript) - エージェントベースモデリング
-- [React Three Fiber](https://docs.pmnd.rs/react-three-fiber) - React 3D レンダリング
-- [Three.js](https://threejs.org/) - WebGL 3D ライブラリ
-- [Crowd Simulation](https://en.wikipedia.org/wiki/Crowd_simulation) - 群衆シミュレーション理論
+### 3. Definitionを作成する
 
-## 🤝 貢献・ライセンス
+```js
+import MyModel from './MyModel.js'
+import { createMySnapshot, initializeMyModel } from './adapter.js'
 
-このプロジェクトは技術者・研究者向けの避難シミュレーション研究用途として開発されています。機能拡張や改良についてはプロジェクトメンテナーまでお問い合わせください。
+export const mySimulation = {
+  id: 'my-model',
+  label: 'My model',
+  defaultConfig: {
+    agentCount: 100,
+    seed: 1234,
+    stepsPerSecond: 10,
+  },
+  createModel: config => new MyModel(config),
+  initialize: initializeMyModel,
+  toSnapshot: createMySnapshot,
+}
+```
+
+### 4. Registryへ登録する
+
+`src/examples/registry.js` にentryを追加します。
+
+```js
+myModel: {
+  definition: mySimulation,
+  controls: {
+    model: {
+      agentCount: { value: 100, min: 1, max: 5000, step: 1 },
+      seed: { value: 1234, min: 1, step: 1 },
+    },
+    visualization: {},
+  },
+  renderers: {
+    Agents: DefaultAgents,
+    Patches: DefaultPatches,
+    Metrics: DefaultMetrics,
+  },
+}
+```
+
+登録後、LevaのModelメニューから選択できます。
+
+## 専用Rendererの追加方法
+
+標準Rendererを使わない場合は、次のpropsを受け取るReact Three Fiberコンポーネントを作成します。
+
+```jsx
+export function MyAgents({ agents }) {
+  return <group>{/* agent visualization */}</group>
+}
+
+export function MyPatches({ patches, options }) {
+  return <group>{/* environment visualization */}</group>
+}
+
+export function MyMetrics({ metrics, isRunning, performance }) {
+  return null
+}
+```
+
+作成したコンポーネントをRegistryの `renderers` に指定します。exitサンプルは人物・壁のGLTFを利用する専用Rendererの例です。
+
+## パフォーマンス
+
+標準Agent/Patch Rendererは `instancedMesh` を利用します。Agent数を増やしても、React要素やdraw callがAgent数に比例して増えません。
+
+Metricsには次の値が表示されます。
+
+- Render FPS: R3Fの描画フレームレート
+- Simulation SPS: Runtimeの実測step数/秒
+- Step Time: モデルstepとSnapshot生成に要した時間
+
+大規模モデルではSnapshot生成自体が負荷になるため、`properties` には描画・分析に必要な値だけを含めてください。
+
+## テスト
+
+テストはNode標準の `node:test` を使用しています。
+
+```bash
+npm test
+```
+
+新しいモデルでは最低限、次を確認してください。
+
+- 同じseedと設定から同じ初期Snapshotが生成される
+- 同じstep列から同じSnapshot列が生成される
+- Snapshot validatorを通過する
+- resetでtickと性能値が初期化される
+- RendererへAgentScriptオブジェクトが漏れていない
+
+## サンプル
+
+- `basic`: seed付きランダムウォーク。標準instanced Rendererを使用
+- `exit`: パッチベースの避難モデル。人物・壁の専用GLTF Rendererを使用

@@ -40,6 +40,11 @@ export const simulationRegistry = {
     definition: exitSimulation,
     controls: {
       model: {
+        seed: {
+          value: exitSimulation.defaultConfig.seed,
+          min: 1,
+          step: 1,
+        },
         population: {
           value: exitSimulation.defaultConfig.population,
           min: 0.05,
