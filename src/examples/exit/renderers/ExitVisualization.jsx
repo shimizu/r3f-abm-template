@@ -70,7 +70,7 @@ export function ExitPatches({ patches, options = {} }) {
   )
 }
 
-export function ExitMetrics({ metrics, isRunning }) {
+export function ExitMetrics({ metrics, isRunning, performance }) {
   const rows = [
     { label: 'Status', value: isRunning ? 'Running' : 'Paused' },
     { label: 'Tick', value: metrics.tick },
@@ -80,6 +80,9 @@ export function ExitMetrics({ metrics, isRunning }) {
     { label: 'Blocked', value: metrics.blockedAgents },
     { label: 'Avg Dist', value: metrics.avgDistanceToExit.toFixed(2) },
     { label: 'Occupancy', value: `${(metrics.occupancyRatio * 100).toFixed(1)}%` },
+    { label: 'Render FPS', value: performance.renderFps.toFixed(1) },
+    { label: 'Simulation SPS', value: performance.actualStepsPerSecond.toFixed(1) },
+    { label: 'Step Time', value: `${performance.stepDurationMs.toFixed(2)} ms` },
   ]
 
   return (

@@ -9,6 +9,7 @@ import {
 } from './examples/registry.js'
 import { createSimulationRuntime } from './simulation/createSimulationRuntime.js'
 import { useSimulation } from './simulation/useSimulation.js'
+import { useRenderPerformance } from './rendering/useRenderPerformance.js'
 
 function Scene() {
   const { simulationId } = useControls('Template', {
@@ -32,6 +33,7 @@ function Scene() {
   )
   const {
     isRunning,
+    performance,
     snapshot,
     start,
     step,
@@ -40,6 +42,7 @@ function Scene() {
     setStepsPerSecond,
     stepsPerSecond,
   } = useSimulation(runtime)
+  const renderFps = useRenderPerformance()
 
   const modelConfig = useControls(
     'Model Parameters',
@@ -84,6 +87,10 @@ function Scene() {
       <MetricsRenderer
         metrics={snapshot.metrics}
         isRunning={isRunning}
+        performance={{
+          ...performance,
+          renderFps,
+        }}
       />
 
       <OrbitControls />

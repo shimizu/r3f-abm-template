@@ -1,40 +1,88 @@
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { Html } from '@react-three/drei'
+import { Color, Object3D } from 'three'
 
 export function DefaultAgents({ agents }) {
+  const meshRef = useRef()
+  const transform = useMemo(() => new Object3D(), [])
+  const color = useMemo(() => new Color(), [])
+  const capacity = Math.max(agents.length, 1)
+
+  useLayoutEffect(() => {
+    const mesh = meshRef.current
+    if (!mesh) return
+
+    agents.forEach((agent, index) => {
+      transform.position.fromArray(agent.position)
+      transform.rotation.fromArray(agent.rotation)
+      transform.updateMatrix()
+      mesh.setMatrixAt(index, transform.matrix)
+      mesh.setColorAt(index, color.set(agent.color ?? '#4dabf7'))
+    })
+
+    mesh.count = agents.length
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    mesh.computeBoundingSphere()
+  }, [agents, color, transform])
+
   return (
-    <group>
-      {agents.map(agent => (
-        <mesh
-          key={agent.id}
-          position={agent.position}
-          rotation={agent.rotation}
-          castShadow
-        >
-          <sphereGeometry args={[0.22, 16, 12]} />
-          <meshStandardMaterial color={agent.color ?? '#4dabf7'} />
-        </mesh>
-      ))}
-    </group>
+    <instancedMesh
+      key={`agents-${capacity}`}
+      ref={meshRef}
+      args={[null, null, capacity]}
+      castShadow
+    >
+      <sphereGeometry args={[0.22, 16, 12]} />
+      <meshStandardMaterial vertexColors />
+    </instancedMesh>
   )
 }
 
 export function DefaultPatches({ patches }) {
+  const meshRef = useRef()
+  const transform = useMemo(() => new Object3D(), [])
+  const color = useMemo(() => new Color(), [])
+  const capacity = Math.max(patches.length, 1)
+
+  useLayoutEffect(() => {
+    const mesh = meshRef.current
+    if (!mesh) return
+
+    patches.forEach((patch, index) => {
+      transform.position.fromArray(patch.position)
+      transform.rotation.set(0, 0, 0)
+      transform.updateMatrix()
+      mesh.setMatrixAt(index, transform.matrix)
+      mesh.setColorAt(index, color.set(patch.color ?? '#273142'))
+    })
+
+    mesh.count = patches.length
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    mesh.computeBoundingSphere()
+  }, [patches, color, transform])
+
   return (
-    <group>
-      {patches.map(patch => (
-        <mesh key={patch.id} position={patch.position} receiveShadow>
-          <boxGeometry args={[0.96, 0.08, 0.96]} />
-          <meshStandardMaterial color={patch.color ?? '#273142'} />
-        </mesh>
-      ))}
-    </group>
+    <instancedMesh
+      key={`patches-${capacity}`}
+      ref={meshRef}
+      args={[null, null, capacity]}
+      receiveShadow
+    >
+      <boxGeometry args={[0.96, 0.08, 0.96]} />
+      <meshStandardMaterial vertexColors />
+    </instancedMesh>
   )
 }
 
-export function DefaultMetrics({ metrics, isRunning }) {
+export function DefaultMetrics({ metrics, isRunning, performance }) {
   const rows = [
     ['status', isRunning ? 'Running' : 'Paused'],
     ...Object.entries(metrics),
+    ['renderFps', performance.renderFps],
+    ['simulationSps', performance.actualStepsPerSecond],
+    ['stepDurationMs', performance.stepDurationMs],
   ]
 
   return (

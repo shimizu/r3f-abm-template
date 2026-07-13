@@ -19,7 +19,7 @@ export const simulationRegistry = {
         agentCount: {
           value: basicSimulation.defaultConfig.agentCount,
           min: 1,
-          max: 200,
+          max: 5000,
           step: 1,
         },
         seed: {

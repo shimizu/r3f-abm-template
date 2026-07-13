@@ -151,7 +151,7 @@ export const simulationDefinition = {
 - 新規モデルが専用 GLTF なしで可視化できる。
 - basic と exit を UI から切り替えられる。
 
-### Phase 4: パフォーマンス対応
+### Phase 4: パフォーマンス対応 ✅
 
 - 標準 Agent Renderer を `instancedMesh` 化する。
 - Snapshot の不要な再生成と React コンポーネントの大量生成を抑える。
