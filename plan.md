@@ -111,7 +111,7 @@ export const simulationDefinition = {
 
 ## 実装フェーズ
 
-### Phase 1: 実行基盤の分離
+### Phase 1: 実行基盤の分離 ✅
 
 - `createSimulationRuntime` を追加する。
 - `start`、`stop`、`step`、`reset`、`subscribe`、`getSnapshot`、`dispose` を提供する。
@@ -127,7 +127,7 @@ export const simulationDefinition = {
 - Scene が AgentScript の turtle / patch オブジェクトを直接参照しない。
 - 現在の避難デモの表示と統計が維持される。
 
-### Phase 2: 避難モデルのサンプル化
+### Phase 2: 避難モデルのサンプル化 ✅
 
 - `ExitModel`、レイアウト、統計計算を `examples/exit/` へ移す。
 - `agentScript.js` のグローバルな可変モデルを廃止する。

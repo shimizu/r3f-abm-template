@@ -1,33 +1,16 @@
 // AgentScriptライブラリから必要なクラスをインポート
 import { Model, World, DataSet } from 'agentscript';
-import { buildAgentSnapshot } from './agentStats.js'
+import { exitDemoLayout } from './layout.js'
 
 // パッチレイアウトデータ（16x16グリッド）
 // 0: 内部（歩行可能）, 1: 壁（通行不可）, 2: 出口
-const data = [
-    [1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-].reverse()
-
-console.log(data)
-
 // DataSetオブジェクトを生成（幅16、高さ16）
 // AgentScriptで使用するマップデータを作成
-const map = new DataSet(data[0].length, data.length, data.flat())
+const map = new DataSet(
+    exitDemoLayout[0].length,
+    exitDemoLayout.length,
+    exitDemoLayout.flat()
+)
 
 
 // 避難シミュレーションモデルクラス
@@ -38,7 +21,6 @@ export default class ExitModel extends Model {
     // コンストラクタ: シミュレーション世界を初期化
     // デフォルトで8x8の世界サイズを設定
     constructor(worldOptions = World.defaultOptions(8, 8)) {
-        console.log("worldOptions", worldOptions)
         super(worldOptions)  // 親クラスModelのコンストラクタを呼び出し
     }
 
@@ -71,7 +53,6 @@ export default class ExitModel extends Model {
                 p.setBreed(this.wall);
             }else if(p.map === 2){
                 // マップ値2: 出口（避難目標地点）
-                console.log([p.x, p.y])
                 p.setBreed(this.exits);
             }else if (p.map === 3){
                 // マップ値3: 空白エリア（外部空間）
@@ -128,78 +109,4 @@ export default class ExitModel extends Model {
             }
         })
     }
-}
-
-export const exitSimulationDefinition = {
-    id: 'exit',
-    label: 'Evacuation',
-    defaultConfig: {
-        population: 0.25,
-        stepsPerSecond: 1000 / 220,
-    },
-    createModel(config) {
-        const model = new ExitModel(config.worldOptions)
-        model.population = config.population
-        return model
-    },
-    initialize(model) {
-        model.startup()
-        model.setup()
-        model.initialAgentCount = model.turtles.length
-        model.visualPatches = model.patches.map(patch => ({
-            id: `patch-${patch.x}-${patch.y}`,
-            type: getPatchType(model, patch),
-            position: [patch.x, -0.5, patch.y],
-            x: patch.x,
-            y: patch.y,
-            properties: {
-                map: patch.map,
-            },
-        }))
-    },
-    toSnapshot(model) {
-        return createExitSnapshot(model)
-    },
-}
-
-function createExitSnapshot(model) {
-    const metrics = buildAgentSnapshot({
-        tick: model.ticks ?? 0,
-        turtles: model.turtles ?? [],
-        insideBreed: model.inside,
-        wallBreed: model.wall,
-        exitCount: model.exits?.length ?? 0,
-        insidePatchCount: model.inside?.length ?? 0
-    })
-
-    const totalAgents = model.initialAgentCount ?? metrics.aliveAgents
-
-    return {
-        tick: model.ticks ?? 0,
-        agents: model.turtles.map(turtle => ({
-            id: turtle.id,
-            type: 'person',
-            position: [turtle.x, -0.5, turtle.y],
-            rotation: [0, 180 - turtle.theta, 0],
-            color: '#ffffff',
-            state: turtle.patch?.breed === model.inside ? 'inside' : 'exiting',
-            properties: {
-                exitId: turtle.exit?.id ?? null,
-            },
-        })),
-        patches: model.visualPatches ?? [],
-        metrics: {
-            ...metrics,
-            totalAgents,
-            exitedAgents: Math.max(0, totalAgents - metrics.aliveAgents),
-        },
-    }
-}
-
-function getPatchType(model, patch) {
-    if (patch.breed === model.wall) return 'wall'
-    if (patch.breed === model.exits) return 'exit'
-    if (patch.breed === model.inside) return 'inside'
-    if (patch.breed === model.empty) return 'empty'
-    return 'default'
 }

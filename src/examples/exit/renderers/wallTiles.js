@@ -1,4 +1,4 @@
-import { Curved, Junction, Straight, Tsplit, End } from './index.jsx'
+import { Curved, Junction, Straight, Tsplit, End } from './WallModels.jsx'
 
 // 壁タイプと描画に使う GLTF コンポーネントの対応表。
 // End だけ専用メッシュを用意しているため straight と分岐させている。
